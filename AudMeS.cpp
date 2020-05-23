@@ -1044,7 +1044,7 @@ random period, and see if 'space' is pressed while the audio is
 played.  Pause for a random period between tones.  Also record key
 presses while no tone is played.
    */
-  long ipoints = 10; // number of frequencies to test
+  long ipoints = 11; // number of frequencies to test
   struct timeval start, now;
 
   if (button_audiogram_start->GetValue()) {
@@ -1052,21 +1052,58 @@ presses while no tone is played.
 
     audiogram_running = 1;
 
-    for(int i=0; i<= (int)ipoints; i++) {
-      gettimeofday(&start, NULL);
+    int levels = 10; // volume levels
+    struct {
+      bool left;
+      float freq;
+      float volume;
+      bool heard;
+    } results[ipoints * 2 * levels];
+    unsigned int test = 0;
+    for(int i=0; i<(int)ipoints; i++) {
       // from 20Hz to 20kHz
       float freq = 20.0*pow(10.0, 3.0*i/ipoints)+50.0;
+      for (bool l : { false, true }) {
+	for (int v = 0; v < levels; v++) {
+	  float volume = pow(10,slide_l_am->GetValue()/20.0) * (v+1) / levels;
+	  assert(test < sizeof(results)/sizeof(results[0]));
+	  results[test].left = l;
+	  results[test].freq = freq;
+	  results[test].volume = volume;
+	  results[test].heard = false;
+	  test++;
+	}
+      }
+    }
+
+    // FIXME randomize, and stop when frequency have been heard
+
+    for(unsigned int i=0; i<= sizeof(results)/sizeof(results[0]); i++) {
+      gettimeofday(&start, NULL);
+      float lfreq = 0;
+      float rfreq = 0;
+      float lvolume = 0;
+      float rvolume = 0;
+      if (results[i].left) {
+	lfreq = results[i].freq;
+	lvolume = results[i].volume;
+      } else {
+	rfreq = results[i].freq;
+	rvolume = results[i].volume;
+      }
       wxString v;
-      v << freq;
+      v << lfreq << '[' << lvolume << "] " << rfreq << '[' << rvolume << ']';
       label_audiogram_freq->SetLabel(v);
-      m_RWAudio->PlaySetGenerator( freq, freq, 0, 0,
-				   pow(10,slide_l_am->GetValue()/20.0),
-				   pow(10,slide_r_am->GetValue()/20.0));
+      m_RWAudio->PlaySetGenerator( lfreq, rfreq, 0, 0,
+				   lvolume, rvolume);
       m_TimeHeared = 0;
       while (0 == m_TimeHeared && 0 == gettimeofday(&now, NULL)
 	     && 3000 > duration(start, now)) {
-	sleep( 400);
+	sleep( 100);
 	wxYield();
+      }
+      if (0 != m_TimeHeared) {
+	results[i].heard = true; // record how long it took to register?
       }
       if (0 == audiogram_running) break;
       SendGenSettings();
