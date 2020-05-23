@@ -43,6 +43,8 @@ BEGIN_EVENT_TABLE( MainFrame, wxFrame )
   EVT_TOGGLEBUTTON( ID_GENSTART, MainFrame::OnGenStart )
   EVT_TOGGLEBUTTON( ID_OSCSTART, MainFrame::OnOscStart )
   EVT_TOGGLEBUTTON( ID_FRMSTART, MainFrame::OnFrmStart )
+  EVT_TOGGLEBUTTON( ID_AUDIOGRAMSTART, MainFrame::OnAudiogramStart )
+  EVT_TOGGLEBUTTON( ID_AUDIOGRAMHEARED, MainFrame::OnAudiogramHeared )
   EVT_MENU( wxID_ABOUT, MainFrame::OnAboutClick )
   EVT_MENU( wxID_EXIT, MainFrame::OnExitClick )
   EVT_MENU( ID_SNDCARD, MainFrame::OnSelectSndCard )
@@ -69,6 +71,7 @@ BEGIN_EVENT_TABLE( MainFrame, wxFrame )
   EVT_BUTTON( ID_AUTOCAL, MainFrame::OnAutoCalClick )
   EVT_CHOICE( ID_OSCXSCALE, MainFrame::OnOscXScaleChanged)
   EVT_CHOICE( ID_FFTLENGTH, MainFrame::OnOscXScaleChanged)
+  EVT_CHAR( MainFrame::OnAudiogramKeyPress)
 END_EVENT_TABLE()
 
 short * g_OscBuffer_Left;
@@ -92,6 +95,7 @@ MainFrame::MainFrame(wxWindow* parent, int id, const wxString& title, const wxPo
     notebook_1_osc = new wxPanel(notebook_1, -1);
     notebook_1_gen = new wxPanel(notebook_1, -1);
     notebook_1_frm = new wxPanel(notebook_1, -1);
+    notebook_1_audiogram = new wxPanel(notebook_1, -1);
     sizer_4_copy_staticbox = new wxStaticBox(notebook_1_gen, -1, wxT("Right channel"));
     sizer_12_staticbox = new wxStaticBox(notebook_1_osc, -1, wxT("Left channel (Red)"));
     sizer_12_copy_staticbox = new wxStaticBox(notebook_1_osc, -1, wxT("Right channel (Green)"));
@@ -226,6 +230,16 @@ MainFrame::MainFrame(wxWindow* parent, int id, const wxString& title, const wxPo
     window_1_frm = new CtrlOScope(notebook_1_frm, _T("Hz"), _T("dB"), 1);
 
 
+    // Audiogram test panel
+    button_audiogram_start =
+      new wxToggleButton(notebook_1_audiogram, ID_AUDIOGRAMSTART, wxT("Start"));
+    button_audiogram_heared =
+      new wxToggleButton(notebook_1_audiogram, ID_AUDIOGRAMHEARED, wxT("Heared"));
+    label_audiogram_current_freq =
+      new wxStaticText(notebook_1_audiogram, -1, wxT("Current frequency:"));
+    label_audiogram_freq =
+      new wxStaticText(notebook_1_audiogram, -1, wxT("n/a"));
+
     set_properties();
     do_layout();
     // end wxGlade
@@ -292,6 +306,8 @@ void MainFrame::do_layout()
 
     wxBoxSizer* sizer_txtfreql = new wxBoxSizer(wxVERTICAL);
     wxBoxSizer* sizer_txtfreqr = new wxBoxSizer(wxVERTICAL);
+
+    wxBoxSizer* sizer_9_audiogram = new wxBoxSizer(wxVERTICAL);
 
     wxFlexGridSizer * sizer_GenL = new wxFlexGridSizer( 3, 2, 5, 5);
     wxFlexGridSizer * sizer_GenR = new wxFlexGridSizer( 3, 2, 5, 5);
@@ -409,11 +425,30 @@ void MainFrame::do_layout()
     sizer_9_frm->Fit(notebook_1_frm);
     sizer_9_frm->SetSizeHints(notebook_1_frm);
 
+    // audiogram test panel
+    sizer_9_audiogram->
+      Add(label_audiogram_current_freq, 0,
+	  wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    sizer_9_audiogram->
+      Add(label_audiogram_freq, 0,
+	  wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    sizer_9_audiogram->
+      Add(button_audiogram_start, 0,
+	  wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    sizer_9_audiogram->
+      Add(button_audiogram_heared, 0,
+	  wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    notebook_1_audiogram->SetAutoLayout(true);
+    notebook_1_audiogram->SetSizer(sizer_9_audiogram);
+    sizer_9_audiogram->Fit(notebook_1_audiogram);
+    sizer_9_audiogram->SetSizeHints(notebook_1_audiogram);
+
     //main notebook
     notebook_1->AddPage(notebook_1_gen, wxT("Generator"));
     notebook_1->AddPage(notebook_1_osc, wxT("Oscilloscope"));
     notebook_1->AddPage(notebook_1_spe, wxT("Spectrum Analyzer"));
     notebook_1->AddPage(notebook_1_frm, wxT("Frequency Response"));
+    notebook_1->AddPage(notebook_1_audiogram, wxT("Audiogram"));
     sizer_1->Add( notebook_1, 1, wxEXPAND, 0);
     SetAutoLayout(true);
     SetSizer(sizer_1);
@@ -968,6 +1003,86 @@ void MainFrame::OnFrmStart(wxCommandEvent& WXUNUSED(event))
   } else {
     button_frm_start->SetLabel(_T("Start"));
     frm_running = 0;
+    SendGenSettings();
+  }
+}
+
+void MainFrame::OnAudiogramKeyPress(wxKeyEvent& event)
+{ // FIXME do not work, nothing received
+    wxLogError("Received key event");
+}
+
+void MainFrame::OnAudiogramHeared(wxCommandEvent& WXUNUSED(event))
+{
+  /*
+register when the subject heared the sound
+  */
+  m_TimeHeared = time(NULL);
+}
+
+/*
+ * Return time difference between start timestamp and end timestamp in
+ * 1000/s.
+ */
+long duration(struct timeval start, struct timeval end)
+{
+  return (end.tv_sec - start.tv_sec) * 1000
+    + (end.tv_usec - start.tv_usec) / 1000;
+}
+
+void MainFrame::OnAudiogramStart(wxCommandEvent& WXUNUSED(event))
+{
+  /*
+Audiogram generation / testing
+
+ISO 389-7:2005
+
+https://www.audiocheck.net/testtones_audiogramtestaudiogram.php
+
+Play random selected frequency from set of measuring points for a
+random period, and see if 'space' is pressed while the audio is
+played.  Pause for a random period between tones.  Also record key
+presses while no tone is played.
+   */
+  long ipoints = 10; // number of frequencies to test
+  struct timeval start, now;
+
+  if (button_audiogram_start->GetValue()) {
+    button_audiogram_start->SetLabel(_T("Stop"));
+
+    audiogram_running = 1;
+
+    for(int i=0; i<= (int)ipoints; i++) {
+      gettimeofday(&start, NULL);
+      // from 20Hz to 20kHz
+      float freq = 20.0*pow(10.0, 3.0*i/ipoints)+50.0;
+      wxString v;
+      v << freq;
+      label_audiogram_freq->SetLabel(v);
+      m_RWAudio->PlaySetGenerator( freq, freq, 0, 0,
+				   pow(10,slide_l_am->GetValue()/20.0),
+				   pow(10,slide_r_am->GetValue()/20.0));
+      m_TimeHeared = 0;
+      while (0 == m_TimeHeared && 0 == gettimeofday(&now, NULL)
+	     && 3000 > duration(start, now)) {
+	sleep( 400);
+	wxYield();
+      }
+      if (0 == audiogram_running) break;
+      SendGenSettings();
+
+      // random amount of silence
+      sleep( 200 + random() % 2000);
+      wxYield();
+    }
+
+    label_audiogram_freq->SetLabel(wxT("n/a"));
+    button_audiogram_start->SetLabel(_T("Start"));
+    button_audiogram_start->SetValue( false);
+
+  } else {
+    button_audiogram_start->SetLabel(_T("Start"));
+    audiogram_running = 0;
     SendGenSettings();
   }
 }

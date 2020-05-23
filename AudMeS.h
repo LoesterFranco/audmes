@@ -54,6 +54,9 @@ private:
   void OnGenStart(wxCommandEvent & event);
   void OnOscStart(wxCommandEvent & event);
   void OnFrmStart(wxCommandEvent& event);
+  void OnAudiogramStart(wxCommandEvent& event);
+  void OnAudiogramHeared(wxCommandEvent& event);
+  void OnAudiogramKeyPress(wxKeyEvent& event);
   void OnAboutClick(wxCommandEvent& event);
   void OnExitClick(wxCommandEvent& event);
   void OnSoundInput(wxEvent & event);
@@ -157,6 +160,14 @@ protected:
   unsigned long int m_SpeBufferLength;
 
   unsigned long int m_SamplingFreq;
+
+  int audiogram_running;
+  wxPanel* notebook_1_audiogram;
+  wxStaticText* label_audiogram_current_freq;
+  wxStaticText* label_audiogram_freq;
+  wxToggleButton* button_audiogram_start;
+  wxToggleButton* button_audiogram_heared;
+  unsigned long int m_TimeHeared;
 };
 
 
