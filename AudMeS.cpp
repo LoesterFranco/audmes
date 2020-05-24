@@ -1045,11 +1045,10 @@ random period, and see if 'space' is pressed while the audio is
 played.  Pause for a random period between tones.  Also record key
 presses while no tone is played.
    */
-  long ipoints = 11; // number of frequencies to test
   struct timeval start, now;
   int bogus_heard = 0;
 
-  // From 125 to 18000 Hz
+  // From 125 Hz to 18 kHz
   float freqs[] =
     {
      125, 250, 500, 1000, 2000, 4000, 8000,
@@ -1062,76 +1061,86 @@ presses while no tone is played.
 
     audiogram_running = 1;
 
-    int levels = 5; // volume levels
+    unsigned int levels = 8; // volume levels
     struct {
       bool left;
       float freq;
-      float volume;
+      unsigned int lastlevel;
       bool heard;
-    } results[ipoints * 2 * levels];
+    } results[freqslen * 2];
     unsigned int resultslen = sizeof(results)/sizeof(results[0]);
     unsigned int test = 0;
-    for(int i=0; i<(int)ipoints; i++) {
-      float freq = 20.0*pow(10.0, 3.0*i/ipoints)+50.0;
+    for(int i=0; i<freqslen; i++) {
+      float freq = freqs[i];
       for (bool l : { false, true }) {
-	for (int v = 0; v < levels; v++) {
-	  float volume = pow(10,slide_l_am->GetValue()/20.0) * (v+1) / levels;
-	  assert(test < resultslen);
-	  results[test].left = l;
-	  results[test].freq = freq;
-	  results[test].volume = volume;
-	  results[test].heard = false;
-	  test++;
+	assert(test < resultslen);
+	results[test].left = l;
+	results[test].freq = freq;
+	results[test].lastlevel = 0;
+	results[test].heard = false;
+	test++;
+      }
+    }
+
+    bool playedsome;
+    do {
+      playedsome = false;
+      // Randomize the order to make it harder for the subject to
+      // predict the next tone and make the results more robust.
+      std::random_shuffle(&results[0], &results[resultslen]);
+
+      for(unsigned int i=0; i < resultslen; i++) {
+	gettimeofday(&start, NULL);
+	// Skip frequencies already heard on lower levels
+	if (results[i].heard)
+	  continue;
+	if (results[i].lastlevel < levels) {
+	  float volume =
+	    pow(10,slide_l_am->GetValue()/20.0)
+	    * (++results[i].lastlevel) / levels;
+	  float lfreq = 0;
+	  float rfreq = 0;
+	  float lvolume = 0;
+	  float rvolume = 0;
+	  if (results[i].left) {
+	    lfreq = results[i].freq;
+	    lvolume = volume;
+	  } else {
+	    rfreq = results[i].freq;
+	    rvolume = volume;
+	  }
+	  wxString v;
+	  v << lfreq << '[' << lvolume << "] " << rfreq << '[' << rvolume << ']';
+	  label_audiogram_freq->SetLabel(v);
+	  m_RWAudio->PlaySetGenerator( lfreq, rfreq, 0, 0,
+				       lvolume, rvolume);
+
+	  /* play tone 2.5-4 seconds */
+	  m_TimeHeared = 0;
+	  long playtime = 2500 + random() % 1500;
+	  while (0 == m_TimeHeared && 0 == gettimeofday(&now, NULL)
+		 && playtime > duration(start, now)) {
+	    sleep( 100);
+	    wxYield();
+	  }
+	  if (0 != m_TimeHeared) {
+	    results[i].heard = true; // record how long it took to register?
+	  }
+	  m_TimeHeared = 0;
+	  SendGenSettings();
+	  if (0 == audiogram_running) break;
+
+	  // random amount of silence 0.2 - 2 seconds
+	  sleep( 200 + random() % 1800);
+	  wxYield();
+	  if (0 != m_TimeHeared) {
+	    bogus_heard++;
+	  }
+	  playedsome = true;
 	}
       }
-    }
-
-    // Randomize the order to make it harder for the subject to
-    // predict the next tone and make the results more robust.
-    std::random_shuffle(&results[0], &results[resultslen]);
-
-    for(unsigned int i=0; i < resultslen; i++) {
-      gettimeofday(&start, NULL);
-      float lfreq = 0;
-      float rfreq = 0;
-      float lvolume = 0;
-      float rvolume = 0;
-      if (results[i].left) {
-	lfreq = results[i].freq;
-	lvolume = results[i].volume;
-      } else {
-	rfreq = results[i].freq;
-	rvolume = results[i].volume;
-      }
-      wxString v;
-      v << lfreq << '[' << lvolume << "] " << rfreq << '[' << rvolume << ']';
-      label_audiogram_freq->SetLabel(v);
-      m_RWAudio->PlaySetGenerator( lfreq, rfreq, 0, 0,
-				   lvolume, rvolume);
-
-      /* play tone 2.5-4 seconds */
-      m_TimeHeared = 0;
-      long playtime = 2500 + random() % 1500;
-      while (0 == m_TimeHeared && 0 == gettimeofday(&now, NULL)
-	     && playtime > duration(start, now)) {
-	sleep( 100);
-	wxYield();
-      }
-      if (0 != m_TimeHeared) {
-	results[i].heard = true; // record how long it took to register?
-      }
-      m_TimeHeared = 0;
       if (0 == audiogram_running) break;
-      SendGenSettings();
-
-      // random amount of silence 0.2 - 2 seconds
-      sleep( 200 + random() % 1800);
-      wxYield();
-      if (0 != m_TimeHeared) {
-	bogus_heard++;
-      }
-    }
-
+    } while (playedsome);
     label_audiogram_freq->SetLabel(wxT("n/a"));
     button_audiogram_start->SetLabel(_T("Start"));
     button_audiogram_start->SetValue( false);
