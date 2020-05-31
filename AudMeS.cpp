@@ -240,6 +240,8 @@ MainFrame::MainFrame(wxWindow* parent, int id, const wxString& title, const wxPo
       new wxStaticText(notebook_1_audiogram, -1, wxT("Current frequency:"));
     label_audiogram_freq =
       new wxStaticText(notebook_1_audiogram, -1, wxT("n/a"));
+    window_1_audiogram =
+      new CtrlOScope(notebook_1_audiogram, _T("Hz"), _T("dB"), 1);
 
     set_properties();
     do_layout();
@@ -427,6 +429,7 @@ void MainFrame::do_layout()
     sizer_9_frm->SetSizeHints(notebook_1_frm);
 
     // audiogram test panel
+    sizer_9_audiogram->Add(window_1_audiogram, 1, wxEXPAND, 0);
     sizer_9_audiogram->
       Add(label_audiogram_current_freq, 0,
 	  wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -487,6 +490,10 @@ void MainFrame::set_custom_props()
   /* freq response */
   window_1_frm->SetXRange( 10, 10000, 1);
   window_1_frm->SetYRange( -100, 0, 0, 1);
+
+  /* Audiogram */
+  window_1_audiogram->SetXRange( 100, 10000, 1);
+  window_1_audiogram->SetYRange( -100, 0, 0, 1);
 
   g_OscBufferChanged = 0;
   g_SpeBufferChanged = 0;
@@ -1110,7 +1117,8 @@ presses while no tone is played.
 	    rvolume = volume;
 	  }
 	  wxString v;
-	  v << lfreq << '[' << lvolume << "] " << rfreq << '[' << rvolume << ']';
+	  v << "freq " << lfreq << "[vol " << lvolume << "] "
+	    << "freq " << rfreq << "[vol " << rvolume << ']';
 	  label_audiogram_freq->SetLabel(v);
 	  m_RWAudio->PlaySetGenerator( lfreq, rfreq, 0, 0,
 				       lvolume, rvolume);

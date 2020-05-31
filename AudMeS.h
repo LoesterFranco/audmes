@@ -168,6 +168,7 @@ protected:
   wxToggleButton* button_audiogram_start;
   wxToggleButton* button_audiogram_heared;
   unsigned long int m_TimeHeared;
+  CtrlOScope* window_1_audiogram;
 };
 
 
