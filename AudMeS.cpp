@@ -1058,8 +1058,9 @@ presses while no tone is played.
   // From 125 Hz to 18 kHz
   float freqs[] =
     {
-     125, 250, 500, 1000, 2000, 4000, 8000,
-     10000, 12000, 14000, 16000, 18000,
+     // 125, 250, 500,
+     1000, 2000, 4000, 8000,
+     //10000, 12000, 14000, 16000, 18000,
     };
   int freqslen = sizeof(freqs)/sizeof(freqs[0]);
 
@@ -1152,7 +1153,22 @@ presses while no tone is played.
     label_audiogram_freq->SetLabel(wxT("n/a"));
     button_audiogram_start->SetLabel(_T("Start"));
     button_audiogram_start->SetValue( false);
-
+    { // Draw audiogram
+      wxArrayDouble ardbl_left;
+      wxArrayDouble ardbl_right;
+      ardbl_left.Clear();
+      ardbl_right.Clear();
+      // Remember to sort list first
+      for(unsigned int i=0; i < resultslen; i++) {
+	if (results[i].left) {
+	  ardbl_left.Add( 20.0*log10(results[i].lastlevel));
+	} else {
+	  ardbl_right.Add( 20.0*log10(results[i].lastlevel));
+	}
+      }
+      window_1_audiogram->SetTrack( ardbl_left );
+      window_1_audiogram->SetTrack2( ardbl_right );
+    }
   } else {
     button_audiogram_start->SetLabel(_T("Start"));
     audiogram_running = 0;
